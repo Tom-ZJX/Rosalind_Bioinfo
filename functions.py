@@ -5,6 +5,7 @@ import numpy as np
 import re
 import scipy
 from itertools import combinations
+from utils import *
 
 # http://rosalind.info/problems/dna/
 def count_base(dna):
@@ -97,17 +98,6 @@ def mortal_fibonacci(n, m): # use python list, no integer overflow problem
 def GC_content(dna):
     return np.mean([s == 'G' or s == 'C' for s in dna if s in ['A', 'T', 'G', 'C']])*100
 GC_content('CCACCCTCGTGGTATGGCTAGGCATTCAGGAACCGGAGAACGCTTCAGACCAGCCCGGACTGGGAACCTGCGGGCAGTAGGTGGAAT')
-
-def read_fasta(file):
-    with open(file, 'r') as f:
-        raw = f.read().split('>')
-        raw.pop(0)
-    dnas = {}
-    for entry in raw:
-        entry = entry.replace('\n', '')
-        match = re.search(r'Rosalind_\d+', entry)
-        dnas[match.group(0)] = entry[(match.span()[1]):]
-    return dnas
 
 def get_highest_GC(file):
     dnas = read_fasta(file)
@@ -378,9 +368,6 @@ def kmp(pattern, text, unique):
 
     return matched_indices
 
-def index_transform(matched_indices):
-    return " ".join([str(i+1) for i in matched_indices]) # python index starts from 0
-
 # http://rosalind.info/problems/splc/
 def exon_protein(file):
     '''
@@ -527,10 +514,6 @@ def find_palindrome_brute_force(dna):
 
             
 find_palindrome('TCAATGCATGCGGGTCTATATGCAT')  
-
-def convert_tuples_to_strings(lst_of_tuples):
-    for tu in lst_of_tuples:
-        print(str(tu[0])+' '+str(tu[1]))
         
 convert_tuples_to_strings(find_palindrome('TCAATGCATGCGGGTCTATATGCAT'))
 
@@ -643,13 +626,6 @@ def glycolysation_motif(file):
         for m in matches:        
             returned[protein].append(m.start())
     return returned
-
-def convert_dict_to_strings(dictionary):
-    for key in dictionary:
-        matched_indices = dictionary[key]
-        if len(matched_indices) > 0:
-            print(key)
-            print(index_transform(matched_indices))
             
 convert_dict_to_strings(glycolysation_motif('rosalind_mprt.txt'))   
 
@@ -1114,14 +1090,6 @@ def edit_reconstruct(s, t):
 edit_reconstruct('PRETTY', 'PRTTEIN')
 
 # http://rosalind.info/problems/glob/
-with open('BLOSUM62.txt', 'r') as f:
-        raw_BLOSUM62 = f.read().split()
-raw_BLOSUM62 = raw_BLOSUM62[20:]
-BLOSUM62 = {}
-
-for i in range(20):
-    BLOSUM62[raw_BLOSUM62[21*i]] = [int(x) for x in raw_BLOSUM62[21*i+1:21*i+21]]
-BLOSUM62 = pd.DataFrame(BLOSUM62, index = BLOSUM62.keys())
 
 def global_alignment_score_linear(s, t, scoring_matrix = BLOSUM62, gap_penalty = 5):
     '''
@@ -1708,7 +1676,8 @@ def generalized_needleman_wunsch(dnas):
         S[tuple(loc)] = candidates[max(candidates.keys(), key = lambda x: candidates[x])]
         
     #print(S)
-    print(S[tuple(all_possible_indices[-1])])
+    score = S[tuple(all_possible_indices[-1])]
+    print(int(score))
     
     loc = all_possible_indices[-1]
     reconstructs = ["" for k in range(n)]
@@ -1734,7 +1703,8 @@ def generalized_needleman_wunsch(dnas):
     for i in range(n):
         for j in range(i+1, n):
             max_score -= sum([reconstructs[i][k] != reconstructs[j][k] for k in range(len(reconstructs[0]))])
-    print(max_score)
+
+    assert max_score == score # sanity check
     
     for reconstruct in reconstructs:
         print(reconstruct)
