@@ -1510,6 +1510,68 @@ def overlap_alignment_linear_dna(s, t, match_score = 1, substitution_penalty = 2
 
 overlap_alignment_linear_dna('CTAAGGGATTCCGGTAATTAGACAG', 'ATAGACCATATGTCAGTGACTGTGTAA')
 
+# http://rosalind.info/problems/sims/
+def find_modified_motif_linear_dna(s, t, match_score = 1, substitution_penalty = 1, gap_penalty = 1):
+    '''
+    local alignment for s, global alignment for t
+    traceback until j = 0
+    '''
+    max_score = [[0]*(len(t)+1) for i in range(len(s)+1)]
+    
+    for i in range(0, len(s)+1):
+        max_score[i][0] = 0 # local alignment for s
+    
+    for j in range(0, len(t)+1):
+        max_score[0][j] = -j*gap_penalty  # global alignment for t
+    
+    for i in range(1,len(s)+1):
+        for j in range(1, len(t)+1):
+            one_match = match_score if s[i-1] == t[j-1] else - substitution_penalty
+            max_score[i][j] = max([max_score[i-1][j-1] + one_match,
+                                   max_score[i-1][j] - gap_penalty,
+                                   max_score[i][j-1] - gap_penalty])
+    
+    candidates = [max_score[i][-1] for i in range(len(s)+1)]
+    best = max(candidates)
+    
+    print(best)
+    
+    # traceback:
+    
+    s_reconstruct = ""
+    t_reconstruct = ""
+    
+
+    max_i = candidates.index(best)    
+    i = max_i
+    j = len(t)
+            
+    while j > 0:
+        one_match = match_score if s[i-1] == t[j-1] else - substitution_penalty
+
+        if max_score[i][j] == max_score[i-1][j-1] + one_match:
+            s_reconstruct = s[i-1] + s_reconstruct
+            t_reconstruct = t[j-1] + t_reconstruct
+            i-=1
+            j-=1
+
+        elif max_score[i][j] == max_score[i-1][j] - gap_penalty:
+            s_reconstruct = s[i-1] + s_reconstruct
+            t_reconstruct = "-" + t_reconstruct
+            i-=1
+
+        else: # max_score[i][j] == max_score[i][j-1] - gap_penalty:
+            s_reconstruct = "-" + s_reconstruct
+            t_reconstruct = t[j-1] + t_reconstruct
+            j-=1
+                
+    print(s_reconstruct)
+    print(t_reconstruct)
+    
+find_modified_motif_linear_dna('GCAAACCATAAGCCCTACGTGCCGCCTGTTTAAACTCGCGAACTGAATCTTCTGCTTCACGGTGAAAGTACCACAATGGTATCACACCCCAAGGAAAC',
+                              'GCCGTCAGGCTGGTGTCCG')
+
+
 # two slightly different approaches for: http://rosalind.info/problems/ctea/
 
 def count_optimal_alignments(s, t):
@@ -1711,3 +1773,136 @@ def generalized_needleman_wunsch(dnas):
 
 dnas = read_fasta('rosalind_mult.txt', 'list')
 generalized_needleman_wunsch(dnas)
+
+
+# http://rosalind.info/problems/mgap/
+def max_gap(s,t):
+    
+    '''
+    we set the mismatch penalty to be -inf
+    the penalty by adding gap to s and adding gap to t is the same, 
+    so the max_score must lead to the same gap number under optimized score case
+    '''
+    
+    max_score = [[0]*(len(t)+1) for i in range(len(s)+1)]
+    traceback = [[0]*(len(t)+1) for i in range(len(s)+1)]
+    for i in range(0, len(s)+1):
+        max_score[i][0] = -i
+    for j in range(0, len(t)+1):
+        max_score[0][j] = -j
+        
+    for i in range(1,len(s)+1):
+        for j in range(1, len(t)+1):
+            one_match = 0 if s[i-1] == t[j-1] else -float('inf')
+            '''
+            remember edit distance scoring scheme is that matching symbol does not contribute to score,
+            but substitutions and gap contributes -1
+            '''
+            candidates = [max_score[i-1][j-1] + one_match,
+                          max_score[i-1][j] - 1,
+                          max_score[i][j-1] - 1]
+            max_score[i][j] = max(candidates)
+            traceback[i][j] = candidates.index(max_score[i][j])
+            
+    i = len(s)
+    j = len(t)
+    gap_num = 0
+    
+    while i*j > 0:
+        
+        one_match = 0 if s[i-1] == t[j-1] else -float('inf')
+        
+        if max_score[i][j] == max_score[i-1][j-1] + one_match:
+            i-=1
+            j-=1
+        elif max_score[i][j] == max_score[i-1][j] - 1:
+            i-=1
+            gap_num += 1
+        else:
+            j-=1
+            gap_num += 1
+    
+    if i == 0 and j == 0:
+        return gap_num
+    elif i == 0:
+        return gap_num + j
+    else:
+        return gap_num + i
+    
+
+max_gap('AACGTA', 'ACACCTA')
+
+
+# http://rosalind.info/problems/osym/
+def align_symbols_cost(s, t):
+    
+    def score_matrix(s, t):
+        max_score = np.zeros((len(s)+1, len(t)+1))
+    
+        for i in range(0, len(s)+1):
+            max_score[i,0] = -i # local alignment for s
+
+        for j in range(0, len(t)+1):
+            max_score[0,j] = -j # global alignment for t
+
+        for i in range(1,len(s)+1):
+            for j in range(1, len(t)+1):
+                one_match = 1 if s[i-1] == t[j-1] else -1
+                max_score[i][j] = max([max_score[i-1,j-1] + one_match,
+                                       max_score[i-1,j] - 1,
+                                       max_score[i,j-1] - 1])
+        return max_score
+    
+    prefix_score_matrix = score_matrix(s, t)
+    suffix_score_matrix = score_matrix(s[::-1], t[::-1])
+    
+    print(int(prefix_score_matrix[-1][-1]))
+    total = 0
+    
+    for i in range(len(s)):
+        for j in range(len(t)):
+            
+            score = prefix_score_matrix[i,j] + int(s[i] == t[j]) - int(s[i] != t[j]) + suffix_score_matrix[len(s)-i-1,len(t)-j-1] 
+            total += int(score)
+            
+    print(total)
+
+align_symbols_cost('ATAGATA', 'ACAGGTA')
+
+
+# http://rosalind.info/problems/scsp/
+def longest_common_subsequence(s, t):
+    subseq_matrix = [["" for i in range(len(t) + 1)] for j in range(len(s)+1)] 
+    # sometimes, it is useful the print out the matrix to see where went wrong
+    for i in range(1, len(s)+1):
+        for j in range(1, len(t)+1):
+            if s[i-1] == t[j-1]:
+                subseq_matrix[i][j] = subseq_matrix[i-1][j-1] + s[i-1]
+            else:
+                subseq_matrix[i][j] = max(subseq_matrix[i][j-1], subseq_matrix[i-1][j], key = len)
+    #print(subseq_matrix)
+    return subseq_matrix[len(s)][len(t)]
+
+longest_common_subsequence('AGGTAB', 'GXTXAYB')
+
+
+def shortest_common_supersequence(s, t):
+    lcs = longest_common_subsequence(s, t)
+    scs = ""
+    
+    while len(lcs) > 0:
+        if s[0] == lcs[0] and t[0] == lcs[0]:
+            scs += s[0]
+            lcs = lcs[1:]
+            s = s[1:]
+            t = t[1:]
+        elif s[0] == lcs[0]: # pause s and add t until s[0] == t[0] == lcs[0]
+            scs += t[0]
+            t = t[1:]
+        else:  # pause t and add s until s[0] == lcs[0]
+            scs += s[0]
+            s = s[1:]
+    
+    return scs + s + t
+
+shortest_common_supersequence('ATCTGAT', 'TGCATA')
