@@ -692,8 +692,27 @@ def perfect_matching(rna):
     # for i = 1, 2, ... rna.count('A'):
     # for each Ui, we have n-i+1 ways to choose Aj to pair with Ui
     
-
 perfect_matching('AGCUAGUCAU')
+
+# http://rosalind.info/problems/mmch/
+def maximum_matching(rna):
+
+    '''
+    return total number of maximum matching basepair edges
+    '''
+    A = rna.count('A')
+    U = rna.count('U')
+    G = rna.count('G')
+    C = rna.count('C')
+    
+    AU_match = factorial(max(A,U), exact=True) // factorial(abs(A-U), exact=True) # essentially a permutation
+    GC_match = factorial(max(G,C), exact=True) // factorial(abs(G-C), exact=True)
+
+    return AU_match * GC_match
+
+maximum_matching('AUGCUUC')
+
+
 
 # http://rosalind.info/problems/cat/
 total_numbers = {'':1,'A':0, 'G':0, 'U':0, 'C':0, 'AA':0, 'GG':0, 'UU':0, 'CC':0,
@@ -1906,3 +1925,270 @@ def shortest_common_supersequence(s, t):
     return scs + s + t
 
 shortest_common_supersequence('ATCTGAT', 'TGCATA')
+
+# http://rosalind.info/problems/pdst/
+def p_dist_matrix(file):
+    
+    dnas = read_fasta(file, 'list')
+    mat = np.zeros((len(dnas), len(dnas)))
+    for i in range(len(dnas)):
+        dna_i = dnas[i]
+        for j in range(len(dnas)):
+            dna_j = dnas[j]
+            mat[i, j] = np.mean([dnas[i][k] != dnas[j][k] for k in range(len(dna_i))])
+        print(' '.join([str(mat[i, j]) for j in range(len(dnas))]))
+    
+    return mat
+
+p_dist_matrix('rosalind_pdst.txt')
+
+from Bio import Phylo
+from io import StringIO
+
+# http://rosalind.info/problems/nwck/
+# http://rosalind.info/problems/nkew/
+def get_dist(string, node1, node2):
+    tree = Phylo.read(StringIO(string), 'newick')
+    path1 = tree.get_path(node1)
+    path2 = tree.get_path(node2)
+    i = 0
+    while i < min(len(path1), len(path2)):
+        if path1[i] == path2[i]:
+            i+=1
+        else:
+            break
+    # identify most recent ancestor
+    # and calculate path lengths from there
+    return sum([sum([int(path[k].branch_length) if path[k].branch_length else 1 for k in range(i, len(path))]) for path in [path1, path2]])
+
+def output_dist(file):
+    dists = []
+    with open(file, 'r') as f:
+        lst = f.read().split()
+    i = 0
+    while i < len(lst):
+        s = lst[i]
+        n1 = lst[i+1]
+        n2 = lst[i+2]
+        tree = Phylo.read(StringIO(s), 'newick')
+        dists.append(str(get_dist(s, n1, n2)))
+        i += 3
+    print(' '.join(dists))
+    return dists
+
+output_dist('rosalind_nwck.txt')
+output_dist('rosalind_nkew.txt')
+
+# http://rosalind.info/problems/seto/
+
+# https://www.geeksforgeeks.org/python-set-operations-union-intersection-difference-symmetric-difference/
+def set_operation(n, A, B):
+    with open('seto_rslt.txt', 'w') as f:
+        f.writelines([str(x)+'\n' for x in [A | B,
+                    A & B,
+                    A - B,
+                    B - A,
+                    set(range(1,n+1)) - A,
+                    set(range(1,n+1)) - B]])
+    
+def output_set_op(file):
+    with open(file, 'r') as f:
+        lst = [x[:-1] for x in f.readlines()] # '\n' counts as one character, strip '\n'    
+    n = int(lst[0])
+    A = set([int(re.sub(r'[{}]', '', x)) for x in lst[1].split(', ')])
+    B = set([int(re.sub(r'[{}]', '', x)) for x in lst[2].split(', ')])
+    set_operation(n, A, B)
+
+output_set_op('rosalind_seto.txt')
+
+# http://rosalind.info/problems/dbru/
+def DeBruijn(file):
+    with open(file, 'r') as f:
+        S = set(f.read().split())        
+        Src = set([reverse_complement(dna) for dna in S])
+    with open('dbru_rslt.txt', 'w') as f:
+        for dna in S | Src:
+            f.write('(' + dna[:-1] + ', ' + dna[1:] + ')\n')
+
+DeBruijn('rosalind_dbru.txt')
+
+# http://rosalind.info/problems/pcov/
+def construct_perfect_cycle(file):
+    with open(file, 'r') as f:
+        S = f.read().split()
+    adjacency_list = {}
+    for dna in S:
+        adjacency_list[dna[:-1]] = dna[1:]
+    
+    dna = S[0][:-1]
+    seq = dna
+    while len(seq) < len(adjacency_list):
+        dna = adjacency_list[dna]
+        seq += dna[-1]
+    return seq
+
+construct_perfect_cycle('rosalind_pcov.txt')
+
+# http://rosalind.info/problems/gasm/
+def kmers(reads, k):
+    adjacency_list = {}
+    for read in set(reads) | set([reverse_complement(dna) for dna in reads]):
+        i = 0
+        while i < len(read) - k:
+            adjacency_list[read[i:i+k]] = read[i+1:i+k+1]
+            i+=1
+    return adjacency_list
+    
+def construct_from_reads(file):
+    with open(file, 'r') as f:
+        reads = f.read().split()
+        
+    for k in range(len(reads[0]) - 1, 1, -1):
+        
+        adjacency_list = kmers(reads, k)
+        kmer = list(adjacency_list.keys())[0]
+        seq = kmer
+        stop = False
+        
+        while seq == kmer or seq[-k:] != seq[:k]:
+            if kmer in adjacency_list:
+                kmer = adjacency_list[kmer]
+                seq += kmer[-1]
+            else:
+                stop = True
+                break
+                
+        if stop: # if the cycle does not complete, we need to find the next k
+            continue
+        else:
+            return seq[:-k]
+
+construct_from_reads('rosalind_gasm.txt')
+
+# http://rosalind.info/problems/grep/
+import copy
+
+def kmers_repeat(file):
+    '''
+    reads are k + 1 mers
+    '''
+    with open(file, 'r') as f:
+        reads = f.read().split()
+    adjacency_list = {}
+    for read in reads:
+        if read[:-1] in adjacency_list:
+            adjacency_list[read[:-1]].append(read[1:])
+        else:
+            adjacency_list[read[:-1]] = [read[1:]]
+    return (adjacency_list, reads[0]) 
+    # we also return read[0] because we want all assembled sequence to start with the first (k+1) mer
+
+def construct_all_seqs(curr_adjacency_lists, curr_kmers, curr_seqs):
+    
+    if len(curr_adjacency_lists) == 0 or len(curr_adjacency_lists[0]) == 0:
+        # the first case should not happen
+        # the second case is when all edges have been traversed
+        return curr_seqs
+    
+    new_curr_seqs = []
+    new_curr_adjacency_lists = []
+    new_curr_kmers = []
+    
+    for i in range(len(curr_kmers)):
+        
+        if curr_kmers[i] in curr_adjacency_lists[i]:
+            
+            nxt_kmers = curr_adjacency_lists[i][curr_kmers[i]]
+            
+            for nxt_kmer in nxt_kmers:
+                if curr_seqs[i]+nxt_kmer[-1] in new_curr_seqs:
+                    # we do not want duplicate seqs in our lists
+                    continue
+                
+                new_curr_kmers.append(nxt_kmer)
+                new_curr_seqs.append(curr_seqs[i]+nxt_kmer[-1])
+                
+                adjacency_list_copy = copy.deepcopy(curr_adjacency_lists[i])
+                adjacency_list_copy[curr_kmers[i]].remove(nxt_kmer)
+                
+                if adjacency_list_copy[curr_kmers[i]] == []:
+                    adjacency_list_copy.pop(curr_kmers[i]) # for simplicity remove kmer with no out edges 
+                    
+                new_curr_adjacency_lists.append(adjacency_list_copy)
+        else:
+            continue
+            
+    return construct_all_seqs(new_curr_adjacency_lists, new_curr_kmers, new_curr_seqs)
+
+def output_seqs(file):
+    adjacency_list, read = kmers_repeat(file)
+    adjacency_list[read[:-1]].remove(read[1:])
+    if adjacency_list[read[:-1]] == []:
+         adjacency_list.pop(read[:-1])
+    seqs = construct_all_seqs([adjacency_list], [read[1:]], [read])
+    #  we want all assembled sequence to start with the first (k+1) mer
+    
+    with open('grep_rslt.txt', 'w') as f:
+        for seq in seqs:
+            f.write(seq[:-len(read)+1] + '\n')
+    # after all edges have been traversed, there will be an overlap between the first kmer in each seq
+    # and the last kmer in each seq, and we need to remove that
+            
+    return [seq[:-len(read)+1] for seq in seqs]
+
+output_seqs('rosalind_grep.txt')
+
+# http://rosalind.info/problems/asmq/
+def Nstat(file, prop):
+    with open(file, 'r') as f:
+        reads = f.read().split()
+    lengths = [len(read) for read in reads]
+    lengths.sort(reverse = True)
+    i = 0
+    sums = 0
+    while sums < sum(lengths) * prop:
+        sums += lengths[i]
+        i+=1
+    return lengths[i-1]
+
+def output_Nstats(file):
+    print(Nstat(file, 0.5), Nstat(file, 0.75))
+
+output_Nstats('rosalind_asmq.txt')
+
+# http://rosalind.info/problems/lia/
+
+from scipy.special import comb
+
+def prob_lia(k, N):
+    genotype_probs = [0, 1, 0] # AA, Aa, aa for single allele
+    i = 0
+    while i <= N:
+        print(genotype_probs)
+        genotype_probs = [genotype_probs[0] * 0.5 + genotype_probs[1] * 0.25,
+                          genotype_probs[0] * 0.5 + genotype_probs[1] * 0.5 + genotype_probs[2] * 0.5,
+                          genotype_probs[2] * 0.5 + genotype_probs[1] * 0.25]
+        i += 1
+        
+    p = genotype_probs[1] ** 2 # prob for AaBb, in fact, this is always 0.25
+    
+    if N > 2 ** (k-1):
+        return sum([comb(2**k, i) * p**i * (1-p)**(2**k-i) for i in range(N, 2**k + 1)])
+    else:
+        return 1 - sum([comb(2**k, i) * p**i * (1-p)**(2**k-i) for i in range(N)])
+
+prob_lia(7, 34)
+
+# http://rosalind.info/problems/rstr/
+def prob_rstr(N, GC, dna):
+    prob = 1
+    for b in dna:
+        if b in 'GC':
+            prob *= GC / 2
+        else:
+            prob *= (1-GC)/2
+            
+    return 1 - (1-prob)**N
+
+prob_rstr(82895, 0.555535, 'ACCCTCTCGC')
+
