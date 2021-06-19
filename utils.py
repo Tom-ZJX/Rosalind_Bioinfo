@@ -89,3 +89,15 @@ def check_score(s, t, f1, f2, max_score, multiple):
         assert score == max_score, "s and t does not give rise to maximum alignment score"
     else:
         return score
+
+# for HMM problems
+def writeMatrixToFile(file, states, emit_chars, trans_mat, emit_mat):
+     with open(file, 'w') as f:
+        f.write('\t'+'\t'.join(states)+'\n')
+        for state in states:
+            f.write(state + '\t' + '\t'.join([str(round(x, 3)) if x != int(x) else str(x) for x in trans_mat.loc[state, :]]) + '\n')
+        f.write('--------\n')
+
+        f.write('\t'+'\t'.join(emit_chars)+'\n')
+        for state in states:
+            f.write(state + '\t' + '\t'.join([str(round(x, 3)) if x != int(x) else str(x) for x in emit_mat.loc[state, :]]) + '\n')

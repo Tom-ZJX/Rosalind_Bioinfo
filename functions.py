@@ -2276,9 +2276,9 @@ def precompute_HMM_info(file):
     
     return (trans_mat, emit_mat, obs, states)
 
-def viterbi(file):
+def viterbi(trans_mat, emit_mat, obs, states, printPath = True):
     
-    trans_mat, emit_mat, obs, states = precompute_HMM_info(file)
+    #trans_mat, emit_mat, obs, states = precompute_HMM_info(file)
     
     initial_probs = [1/len(states) for state in states] # assumes all states are equally likely at the start
     
@@ -2303,16 +2303,17 @@ def viterbi(file):
     # traceback
     best_loc = np.argmax(path_probs[:,-1])
     t = len(obs) - 1
-    path = states[best_loc]
+    path = [states[best_loc]]
     
     while t > 0:
         best_loc = int(traceback[best_loc, t])
-        path = states[best_loc] + path
+        path = [states[best_loc]] + path
         t -= 1
-        
+    if printPath:
+        print(''.join(path))
     return path
     
-viterbi('rosalind_ba10c.txt')
+viterbi(*precompute_HMM_info('rosalind_ba10c.txt'))
 
 # http://rosalind.info/problems/ba10d/
 def HMM_likelihood(file):
@@ -2343,6 +2344,7 @@ def HMM_likelihood(file):
 HMM_likelihood('rosalind_ba10d.txt')
 
 # http://rosalind.info/problems/ba10d/
+
 def forward_algo(trans_mat, emit_mat, obs, states):
     
     initial_probs = [1/len(states) for state in states] # assumes all states are equally likely at the start
@@ -2377,8 +2379,7 @@ def backward_algo(trans_mat, emit_mat, obs, states):
             
     return backward_probs
 
-def Baum_Welch(file):
-    
+def get_HMM_learning_info(file):
     with open(file, 'r') as f:
         lst = f.readlines()
     iter_lim = int(lst[0][:-1])
@@ -2393,6 +2394,12 @@ def Baum_Welch(file):
     for i in range(len(states)):
         emit_mat[i,:] = [float(x) for x in re.split(r'\s', lst[9+len(states)+2+i][1:]) if x != '']
     emit_mat = pd.DataFrame(emit_mat, index = states, columns = emit_chars)
+    
+    return (iter_lim, obs, emit_chars, states, trans_mat, emit_mat)
+
+def Baum_Welch(file):
+    
+    iter_lim, obs, emit_chars, states, trans_mat, emit_mat = get_HMM_learning_info(file)
         
     num_iter = 0
     print(iter_lim)
@@ -2435,19 +2442,61 @@ def Baum_Welch(file):
         print(num_iter)
         num_iter+=1
     
-    with open('ba10k_rslt.txt', 'w') as f:
-        f.write('\t'.join(states)+'\n')
-        for state in states:
-            f.write(state + '\t' + '\t'.join(["{:.3f}".format(x) for x in trans_mat.loc[state, :]]) + '\n')
-        f.write('--------\n')
-        
-        f.write('\t'+'\t'.join(emit_chars)+'\n')
-        for state in states:
-            f.write(state + '\t' + '\t'.join(["{:.3f}".format(x) for x in emit_mat.loc[state, :]]) + '\n') 
+    writeMatrixToFile('ba10k_rslt.txt', states, emit_chars, trans_mat, emit_mat)
     
     return (trans_mat, emit_mat)
     
 Baum_Welch('rosalind_ba10k.txt')
+
+# http://rosalind.info/problems/ba10h/
+def get_HMM_path_obs(file):
+    with open(file, 'r') as f:
+        lst = f.readlines()
+    obs = lst[0][:-1]
+    emit_chars = [x for x in re.split(r'\s', lst[2]) if x != '']
+    path = lst[4][:-1]
+    states = [x for x in re.split(r'\s', lst[6]) if x != '']
+    return (path, obs, states, emit_chars)
+
+def HMM_param_est(path, obs, states, emit_chars, file = True):
+    assert len(path) == len(obs)
+    trans_mat = pd.DataFrame(np.zeros((len(states), len(states))), index = states, columns = states)
+    emit_mat = pd.DataFrame(np.zeros((len(states), len(emit_chars))), index = states, columns = emit_chars)
+    
+    for i in range(len(obs)-1):
+        trans_mat.loc[path[i], path[i+1]] += 1
+        emit_mat.loc[path[i], obs[i]] += 1
+    emit_mat.loc[path[-1], obs[-1]] += 1
+    
+    for state in states:
+        if sum(trans_mat.loc[state, :]) > 0:
+            trans_mat.loc[state, :] /= sum(trans_mat.loc[state, :])
+        if sum(emit_mat.loc[state, :]) > 0:
+            emit_mat.loc[state, :] /= sum(emit_mat.loc[state, :])
+    if file:
+        writeMatrixToFile('ba10h_rslt.txt', states, emit_chars, trans_mat, emit_mat)
+    return (trans_mat, emit_mat)
+
+HMM_param_est(*get_HMM_path_obs('rosalind_ba10h.txt'), True)
+
+# http://rosalind.info/problems/ba10i/
+def Viterbi_Learning(file):
+    
+    iter_lim, obs, emit_chars, states, trans_mat, emit_mat = get_HMM_learning_info(file)
+    
+    num_iter = 0
+    print(iter_lim)
+    while num_iter < iter_lim:
+        
+        print(num_iter)
+        
+        path = viterbi(trans_mat, emit_mat, obs, states, False) # compute best hidden path
+        trans_mat, emit_mat = HMM_param_est(path, obs, states, emit_chars, file = False) # new estimation
+        num_iter += 1
+        
+    writeMatrixToFile('ba10i_rslt.txt', states, emit_chars, trans_mat, emit_mat)
+
+Viterbi_Learning('rosalind_ba10i.txt')
 
 # http://rosalind.info/problems/ba10e/
 # http://rosalind.info/problems/ba10f/
@@ -2589,17 +2638,9 @@ def profile_HMM_matrix(file, pseudocount = False):
     
     
     '''
-    the output file has to be in the exact format as follows:
+    the output file has to be in the exact format as follows (see writeMatrixToFile function in utils):
     '''
-    with open('ba10f_rslt.txt', 'w') as f:
-        f.write('\t'+'\t'.join(states)+'\n')
-        for state in states:
-            f.write(state + '\t' + '\t'.join([str(round(x, 3)) if x != int(x) else str(x) for x in trans_mat.loc[state, :]]) + '\n')
-        f.write('--------\n')
-        
-        f.write('\t'+'\t'.join(emit_chars)+'\n')
-        for state in states:
-            f.write(state + '\t' + '\t'.join([str(round(x, 3)) if x != int(x) else str(x) for x in emit_mat.loc[state, :]]) + '\n') 
+    writeMatrixToFile('ba10f_rslt.txt', states, emit_chars, trans_mat, emit_mat) 
     
     return (trans_mat, emit_mat)
 
@@ -2610,6 +2651,7 @@ profile_HMM_matrix('rosalind_ba10f.txt', True)
 class Viterbi_Graph: # it is easier to use graph structure rather than matrix to represent profile HMM
     '''
     adapted from https://github.com/egeulgen/Bioinformatics_Textbook_Track/blob/master/solutions/BA10G.py
+    the adapted Viterbi algorithm pseudocode: https://profs.info.uaic.ro/~ciortuz/SLIDES/profileHMM.pdf
     '''
     def __init__(self):
         self.all_nodes = {}
