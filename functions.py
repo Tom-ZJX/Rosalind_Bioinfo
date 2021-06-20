@@ -2343,7 +2343,7 @@ def HMM_likelihood(file):
 
 HMM_likelihood('rosalind_ba10d.txt')
 
-# http://rosalind.info/problems/ba10d/
+# http://rosalind.info/problems/ba10j/
 
 def forward_algo(trans_mat, emit_mat, obs, states):
     
@@ -2379,6 +2379,40 @@ def backward_algo(trans_mat, emit_mat, obs, states):
             
     return backward_probs
 
+def soft_decoding(file = 'rosalind_ba10j.txt'):
+    '''
+    we basically want the conditional probability of each state at each time t given the emitted string
+    which is equal to the forward prob * backward prob of each state at each time t 
+    divided by the likelihood of tHe emitted string
+    see: https://www.inf.ed.ac.uk/teaching/courses/asr/2008-9/asr-hmm.pdf and search for 'soft'
+    '''
+    
+    trans_mat, emit_mat, obs, states = precompute_HMM_info(file)
+    
+    forward_probs = forward_algo(trans_mat, emit_mat, obs, states)
+    backward_probs = backward_algo(trans_mat, emit_mat, obs, states)
+    
+    # print(sum(forward_probs[:, -1]), sum(backward_probs[:, 0]*emit_mat.loc[:,obs[0]])/len(states))
+    
+    assert np.isclose(sum(forward_probs[:, -1]), sum(backward_probs[:, 0]*emit_mat.loc[:,obs[0]])/len(states))
+    # check that the likelihood of observation is the same when computed by forward and backward probs
+        
+    likelihood = sum(forward_probs[:, -1]) 
+    
+    cond_probs = pd.DataFrame(np.zeros((len(obs), len(states))), columns = states, index = list(range(len(obs))))
+    
+    for i in range(len(states)):
+        for t in range(len(obs)):
+            cond_probs.iloc[t, i] = forward_probs[i, t] * backward_probs[i, t] / likelihood
+            
+    with open('ba10j_rslt.txt', 'w') as f:
+        f.write('\t'.join(states)+'\n')
+        for t in range(len(obs)):
+            f.write('\t'.join([str(round(x, 3)) if x != int(x) else str(x) for x in cond_probs.iloc[t, :]]) + '\n')
+        
+soft_decoding()
+
+# http://rosalind.info/problems/ba10k/
 def get_HMM_learning_info(file):
     with open(file, 'r') as f:
         lst = f.readlines()
@@ -2409,7 +2443,12 @@ def Baum_Welch(file):
         forward_probs = forward_algo(trans_mat, emit_mat, obs, states)
         backward_probs = backward_algo(trans_mat, emit_mat, obs, states)
         
+        '''
         assert np.isclose(sum(forward_probs[:, -1]), sum(backward_probs[:, 0]*emit_mat.iloc[:,0])/len(states))
+        the above is in fact incorrect
+        the correct version is:
+        '''
+        assert np.isclose(sum(forward_probs[:, -1]), sum(backward_probs[:, 0]*emit_mat.loc[:,obs[0]])/len(states))
         # check that the likelihood of observation is the same when computed by forward and backward probs
         
         likelihood = sum(forward_probs[:, -1])
@@ -2459,6 +2498,10 @@ def get_HMM_path_obs(file):
     return (path, obs, states, emit_chars)
 
 def HMM_param_est(path, obs, states, emit_chars, file = True):
+    '''
+    see http://cs229.stanford.edu/section/cs229-hmm.pdf
+    use Lagrange multiplier to solve for MLE
+    '''
     assert len(path) == len(obs)
     trans_mat = pd.DataFrame(np.zeros((len(states), len(states))), index = states, columns = states)
     emit_mat = pd.DataFrame(np.zeros((len(states), len(emit_chars))), index = states, columns = emit_chars)
@@ -2701,15 +2744,23 @@ class Viterbi_Graph: # it is easier to use graph structure rather than matrix to
         
         valid_nodes = ['S']
         valid_nodes.extend([(0, s) for s in states if s[0] == 'D']) # only D can match empty string
+        # the first item indicates the posItIon in obs, where we adopt 1-indexing instead of 0-indexing 
         for i in range(1, len(obs)+1):
             valid_nodes.extend([(i, s) for s in states if s not in 'SE'])
         valid_nodes.append('E')
+
+        '''
+        valid transitions include and only include S to (0,D1), (1,I0), (1,M1)
+        (t,Dj),(t,Ij),(t,Mj) to (t,Dj+1), (t+1,Ij), (t+1,Mj+1)
+        and (T,Dl),(T,Il),(T,Ml) to E where T == len(obs) and l == len(cols_to_keep) in profile_HMM_matrix
+        '''
         
         valid_transitions = []
         for node in valid_nodes:
             if node == 'S':
                 valid_transitions.extend([('S', x) for x in [(0,'D1'), (1,'I0'), (1,'M1')]])
                 # we need to put D first, because we need to consider the position 0 of string before position 1
+                # this sequence is important in BFS traversal
             elif node == 'E':
                 continue
             else:
